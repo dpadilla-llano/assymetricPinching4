@@ -26,7 +26,8 @@ clc
 MDL = Pinching4_cycpush_0_mat0;
 
 %========== Call Pinching4 ================================================
-force = Pinching4(MDL);
+% force = Pinching4(MDL);
+force = axialTWSsection(MDL);
 
 %========== Post Process (plot) ===========================================
 % Simple plot to show the force/stress vs. displacement/strain curve
