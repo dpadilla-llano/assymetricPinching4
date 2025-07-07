@@ -1,0 +1,76 @@
+% function [TnCycle,TgammaK,TgammaD,TgammaF] = ...
+%           updateDmg(strain,dstrain,TmaxStrainDmnd,TminStrainDmnd,envlpPosStrain,envlpNegStrain, ...
+%           CnCycle,Tenergy,energyCapacity,DmgCyc,elasticStrainEnergy,envlpPosDamgdStress,envlpNegDamgdStress, ...
+%           kElasticPos,kElasticNeg,TnCycle,TgammaK,TgammaD,TgammaF,MDL)
+function [TnCycle,TgammaPosK,TgammaNegK,TgammaPosD,TgammaNegD,TgammaPosF,TgammaNegF] = ...
+          updateDmgMod(strain,dstrain,TmaxStrainDmnd,TminStrainDmnd,envlpPosStrain,envlpNegStrain, ...
+          CnCycle,Tenergy,energyCapacity,DmgCyc,elasticStrainEnergy,envlpPosDamgdStress,envlpNegDamgdStress, ...
+          kElasticPos,kElasticNeg,TnCycle,TgammaPosK,TgammaNegK,TgammaPosD,TgammaNegD,TgammaPosF,TgammaNegF,MDL)      
+    %==========================================================================
+    % File Name: updateDmg.m
+    % Description: This subroutine is used to update the damage parameters 
+    %              after a trial state is set. 
+    %
+    %                                 Prepared by Jiazhen Leng (jleng1@jhu.edu)
+    %                                                 Johns Hopkins University
+    %==========================================================================
+    % tes, umaxAbs and uultAbs are local variables
+    tes = 0.0;
+    umaxAbs = max([TmaxStrainDmnd -TminStrainDmnd]);
+    uultAbs = max([envlpPosStrain(5) -envlpNegStrain(5)]);
+    TnCycle = CnCycle + abs(dstrain)/(4*umaxAbs);
+    
+    uultPos = envlpPosStrain(5);
+    uultNeg = envlpNegStrain(5);
+
+%     if ((strain<uultPos && strain>uultNeg) && Tenergy < energyCapacity)
+        TgammaPosK = MDL.gammaPosK1*power((umaxAbs/uultAbs),MDL.gammaPosK3);
+        TgammaPosD = MDL.gammaPosD1*power((umaxAbs/uultAbs),MDL.gammaPosD3);
+        TgammaPosF = MDL.gammaPosF1*power((umaxAbs/uultAbs),MDL.gammaPosF3);
+        TgammaNegK = MDL.gammaNegK1*power((umaxAbs/uultAbs),MDL.gammaNegK3);
+        TgammaNegD = MDL.gammaNegD1*power((umaxAbs/uultAbs),MDL.gammaNegD3);
+        TgammaNegF = MDL.gammaNegF1*power((umaxAbs/uultAbs),MDL.gammaNegF3);
+
+        if (Tenergy > elasticStrainEnergy && DmgCyc == 0)
+            tes = ((Tenergy-elasticStrainEnergy)/energyCapacity);
+            TgammaPosK = TgammaPosK + MDL.gammaPosK2*power(tes,MDL.gammaPosK4);
+            TgammaPosD = TgammaPosD + MDL.gammaPosD2*power(tes,MDL.gammaPosD4);
+            TgammaPosF = TgammaPosF + MDL.gammaPosF2*power(tes,MDL.gammaPosF4);
+            TgammaNegK = TgammaNegK + MDL.gammaNegK2*power(tes,MDL.gammaNegK4);
+            TgammaNegD = TgammaNegD + MDL.gammaNegD2*power(tes,MDL.gammaNegD4);
+            TgammaNegF = TgammaNegF + MDL.gammaNegF2*power(tes,MDL.gammaNegF4);                        
+        elseif (DmgCyc == 1) 
+            TgammaPosK = TgammaPosK + MDL.gammaPosK2*power(TnCycle,MDL.gammaPosK4);
+            TgammaPosD = TgammaPosD + MDL.gammaPosD2*power(TnCycle,MDL.gammaPosD4);
+            TgammaPosF = TgammaPosF + MDL.gammaPosF2*power(TnCycle,MDL.gammaPosF4);
+            TgammaNegK = TgammaNegK + MDL.gammaNegK2*power(TnCycle,MDL.gammaNegK4);
+            TgammaNegD = TgammaNegD + MDL.gammaNegD2*power(TnCycle,MDL.gammaNegD4);
+            TgammaNegF = TgammaNegF + MDL.gammaNegF2*power(TnCycle,MDL.gammaNegF4);        
+        end    
+        
+        gammaKLimEnvPos = max([0.0 (1.0-(((posEnvlpStress(TmaxStrainDmnd,envlpPosDamgdStress,envlpPosStrain)/TmaxStrainDmnd))/kElasticPos))]);
+        gammaKLimEnvNeg = max([0.0 (1.0-(((negEnvlpStress(TminStrainDmnd,envlpNegDamgdStress,envlpNegStrain)/TminStrainDmnd))/kElasticNeg))]);       
+        gammaFLimEnvPos = max([0.0 (1.0-(((posEnvlpStress(TmaxStrainDmnd,envlpPosDamgdStress,envlpPosStrain)))/kElasticPos))]);
+        gammaFLimEnvNeg = max([0.0 (1.0-(((negEnvlpStress(TminStrainDmnd,envlpNegDamgdStress,envlpNegStrain)))/kElasticNeg))]);
+        
+        TgammaPosK = min([min([TgammaPosK MDL.gammaPosKLimit]) gammaKLimEnvPos]);
+        TgammaPosD = min([1 TgammaPosD MDL.gammaPosDLimit]);
+        TgammaPosF = min([1 TgammaPosF MDL.gammaPosFLimit]);
+        TgammaNegK = min([min([TgammaNegK MDL.gammaNegKLimit]) gammaKLimEnvNeg]);
+        TgammaNegD = min([1 TgammaNegD MDL.gammaNegDLimit]);
+        TgammaNegF = min([1 TgammaNegF MDL.gammaNegFLimit]);        
+
+%     elseif (strain<uultPos && strain>uultNeg)
+%         gammaKLimEnvPos = max([0.0 (1.0-(((posEnvlpStress(TmaxStrainDmnd,envlpPosDamgdStress,envlpPosStrain)/TmaxStrainDmnd))/kElasticPos))]);
+%         gammaKLimEnvNeg = max([0.0 (1.0-(((negEnvlpStress(TminStrainDmnd,envlpNegDamgdStress,envlpNegStrain)/TminStrainDmnd))/kElasticNeg))]);
+%         
+%         TgammaPosK = min([gammaKLimEnvPos MDL.gammaPosKLimit]);
+%         TgammaPosD = min([TgammaPosD MDL.gammaPosDLimit]);
+%         TgammaPosF = min([TgammaPosF MDL.gammaPosFLimit]);
+%         TgammaNegK = min([gammaKLimEnvNeg MDL.gammaNegKLimit]);
+%         TgammaNegD = min([TgammaNegD MDL.gammaNegDLimit]);
+%         TgammaNegF = min([TgammaNegF MDL.gammaNegFLimit]);    
+%             
+%     end
+% disp(num2str((Tenergy-elasticStrainEnergy)/energyCapacity))
+end
